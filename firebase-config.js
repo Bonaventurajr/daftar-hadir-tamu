@@ -23,3 +23,6 @@ db.enablePersistence()
     .catch((err) => {
         console.warn('⚠️ Firestore persistence error:', err);
     });
+    firebase.firestore().settings({
+    cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED
+});

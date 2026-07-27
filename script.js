@@ -10,10 +10,14 @@
     const keperluanInput = document.getElementById('keperluan');
     const tableBody = document.getElementById('tableBody');
     const totalSpan = document.getElementById('totalCount');
+    const saveBtn = document.getElementById('saveBtn');
+    const resetBtn = document.getElementById('resetBtn');
 
     // State
     let guests = [];
     let isLoading = false;
+    let dataLoaded = false;
+    let isSaving = false;
 
     // Collection reference
     const guestsCollection = db.collection('tamu');
@@ -43,8 +47,67 @@
         });
     }
 
+    // Tampilkan skeleton loading
+    function showSkeleton() {
+        tableBody.innerHTML = `
+            <tr id="skeletonRow">
+                <td colspan="7">
+                    <div class="skeleton-container">
+                        <div class="skeleton-item">
+                            <div class="skeleton-shimmer"></div>
+                            <div class="skeleton-shimmer"></div>
+                            <div class="skeleton-shimmer"></div>
+                            <div class="skeleton-shimmer"></div>
+                            <div class="skeleton-shimmer"></div>
+                            <div class="skeleton-shimmer"></div>
+                            <div class="skeleton-shimmer" style="max-width:30px;"></div>
+                        </div>
+                        <div class="skeleton-item">
+                            <div class="skeleton-shimmer"></div>
+                            <div class="skeleton-shimmer"></div>
+                            <div class="skeleton-shimmer"></div>
+                            <div class="skeleton-shimmer"></div>
+                            <div class="skeleton-shimmer"></div>
+                            <div class="skeleton-shimmer"></div>
+                            <div class="skeleton-shimmer" style="max-width:30px;"></div>
+                        </div>
+                        <div class="skeleton-item">
+                            <div class="skeleton-shimmer"></div>
+                            <div class="skeleton-shimmer"></div>
+                            <div class="skeleton-shimmer"></div>
+                            <div class="skeleton-shimmer"></div>
+                            <div class="skeleton-shimmer"></div>
+                            <div class="skeleton-shimmer"></div>
+                            <div class="skeleton-shimmer" style="max-width:30px;"></div>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }
+
+    // Sembunyikan skeleton
+    function hideSkeleton() {
+        const skeleton = document.getElementById('skeletonRow');
+        if (skeleton) {
+            skeleton.remove();
+        }
+    }
+
+    // Reset tombol save ke keadaan normal
+    function resetSaveButton() {
+        if (saveBtn) {
+            saveBtn.innerHTML = '<i class="fas fa-save"></i> Simpan';
+            saveBtn.disabled = false;
+        }
+        isSaving = false;
+    }
+
     // Render table
     function renderTable() {
+        // Hapus skeleton jika ada
+        hideSkeleton();
+
         if (guests.length === 0) {
             tableBody.innerHTML = `
                 <tr>
@@ -107,11 +170,24 @@
         if (isLoading) return;
         isLoading = true;
 
+        // Tampilkan skeleton hanya jika belum ada data
+        if (!dataLoaded) {
+            showSkeleton();
+        }
+
         guestsCollection
             .orderBy('tanggal', 'desc')
             .orderBy('jam', 'desc')
-            .onSnapshot((snapshot) => {
+            .limit(100)
+            .onSnapshot({
+                includeMetadataChanges: true
+            }, (snapshot) => {
+                const source = snapshot.metadata.fromCache ? 'cache' : 'server';
+                console.log(`📦 Data loaded from: ${source}`);
+
+                // Kosongkan array guests
                 guests = [];
+                
                 snapshot.forEach((doc) => {
                     const data = doc.data();
                     guests.push({
@@ -123,12 +199,42 @@
                         keperluan: data.keperluan || ''
                     });
                 });
-                renderTable();
+
+                // Tandai data sudah dimuat
+                dataLoaded = true;
                 isLoading = false;
+
+                // Render tabel
+                renderTable();
+
+                // Reset tombol save jika masih loading
+                resetSaveButton();
+
+                if (source === 'server') {
+                    console.log('✅ Data terbaru dari server');
+                }
+
             }, (error) => {
                 console.error('❌ Error listening to Firestore:', error);
+                
+                // Hapus skeleton jika error
+                hideSkeleton();
                 isLoading = false;
-                alert('⚠️ Gagal terhubung ke database. Periksa koneksi internet Anda.');
+                resetSaveButton();
+
+                // Jika belum ada data, tampilkan error
+                if (!dataLoaded) {
+                    tableBody.innerHTML = `
+                        <tr>
+                            <td colspan="7">
+                                <div class="empty-state" style="color: rgba(255,255,255,0.4);">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    <p>Gagal terhubung ke database.<br/>Periksa koneksi internet Anda.</p>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }
             });
     }
 
@@ -136,12 +242,19 @@
     async function addGuest(event) {
         event.preventDefault();
 
+        // Cegah double submit
+        if (isSaving) {
+            console.log('⏳ Masih menyimpan, tunggu sebentar...');
+            return;
+        }
+
         const nama = namaInput.value.trim();
         const institusi = institusiInput.value.trim();
         const tanggal = tanggalInput.value;
         const jam = jamInput.value;
         const keperluan = keperluanInput.value.trim();
 
+        // Validasi
         if (!nama) {
             alert('⚠️ Nama lengkap wajib diisi.');
             namaInput.focus();
@@ -163,13 +276,13 @@
             return;
         }
 
-        try {
-            // Tampilkan indikator loading pada tombol
-            const saveBtn = document.getElementById('saveBtn');
-            const originalText = saveBtn.innerHTML;
-            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
-            saveBtn.disabled = true;
+        // Set status saving
+        isSaving = true;
+        const originalText = saveBtn.innerHTML;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
+        saveBtn.disabled = true;
 
+        try {
             // Simpan ke Firestore
             await guestsCollection.add({
                 nama: nama,
@@ -180,25 +293,19 @@
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
-            // Reset form
+            // Reset form setelah berhasil
             form.reset();
             setDefaults();
             namaInput.focus();
 
-            // Kembalikan tombol
-            saveBtn.innerHTML = originalText;
-            saveBtn.disabled = false;
-
-            // Scroll ke tabel
-            document.querySelector('.table-wrapper').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            console.log('✅ Data berhasil disimpan');
 
         } catch (error) {
             console.error('❌ Error adding guest:', error);
             alert('⚠️ Gagal menyimpan data. Periksa koneksi internet Anda.');
-            
-            const saveBtn = document.getElementById('saveBtn');
-            saveBtn.innerHTML = '<i class="fas fa-save"></i> Simpan';
-            saveBtn.disabled = false;
+        } finally {
+            // Kembalikan tombol ke keadaan normal
+            resetSaveButton();
         }
     }
 
@@ -212,7 +319,7 @@
 
         try {
             await guestsCollection.doc(id).delete();
-            // Data akan otomatis terhapus dari UI karena listener real-time
+            console.log('✅ Data berhasil dihapus');
         } catch (error) {
             console.error('❌ Error deleting guest:', error);
             alert('⚠️ Gagal menghapus data. Periksa koneksi internet Anda.');
@@ -224,11 +331,14 @@
         form.reset();
         setDefaults();
         namaInput.focus();
+        // Reset tombol save jika ada
+        resetSaveButton();
     }
 
     // ----- EVENT LISTENERS -----
     form.addEventListener('submit', addGuest);
-    document.getElementById('resetBtn').addEventListener('click', function(e) {
+    
+    resetBtn.addEventListener('click', function(e) {
         e.preventDefault();
         resetForm();
     });
