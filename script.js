@@ -1,7 +1,7 @@
 (function() {
     'use strict';
 
-    // ----- DOM refs -----
+    // DOM refs
     const form = document.getElementById('guestForm');
     const namaInput = document.getElementById('nama');
     const institusiInput = document.getElementById('institusi');
@@ -11,10 +11,14 @@
     const tableBody = document.getElementById('tableBody');
     const totalSpan = document.getElementById('totalCount');
 
-    // ----- State -----
+    // State
     let guests = [];
+    let isLoading = false;
 
-    // ----- Helper: set default date & time -----
+    // Collection reference
+    const guestsCollection = db.collection('tamu');
+
+    // Set default date & time
     function setDefaults() {
         const now = new Date();
         const year = now.getFullYear();
@@ -27,7 +31,7 @@
         jamInput.value = `${hours}:${minutes}`;
     }
 
-    // ----- Escaping sederhana -----
+    // Escape HTML
     function escHtml(str) {
         if (!str) return '';
         return String(str).replace(/[&<>"]/g, function(m) {
@@ -39,7 +43,7 @@
         });
     }
 
-    // ----- Render tabel -----
+    // Render table
     function renderTable() {
         if (guests.length === 0) {
             tableBody.innerHTML = `
@@ -76,7 +80,7 @@
                     <td>${escHtml(g.institusi) || '—'}</td>
                     <td><span class="badge-purpose ${purposeClass}">${escHtml(g.keperluan)}</span></td>
                     <td style="text-align:center;">
-                        <button class="action-delete" data-index="${index}" title="Hapus">
+                        <button class="action-delete" data-id="${g.id}" title="Hapus">
                             <i class="fas fa-trash-alt"></i>
                         </button>
                     </td>
@@ -87,19 +91,49 @@
         tableBody.innerHTML = html;
         totalSpan.textContent = guests.length;
 
-        // event listener hapus per tombol
+        // Delete buttons
         document.querySelectorAll('.action-delete').forEach(btn => {
             btn.addEventListener('click', function(e) {
-                const idx = parseInt(this.dataset.index, 10);
-                if (!isNaN(idx)) {
-                    deleteGuest(idx);
+                const id = this.dataset.id;
+                if (id) {
+                    deleteGuest(id);
                 }
             });
         });
     }
 
-    // ----- Tambah tamu -----
-    function addGuest(event) {
+    // ----- LISTEN DATA REAL-TIME DARI FIRESTORE -----
+    function listenGuests() {
+        if (isLoading) return;
+        isLoading = true;
+
+        guestsCollection
+            .orderBy('tanggal', 'desc')
+            .orderBy('jam', 'desc')
+            .onSnapshot((snapshot) => {
+                guests = [];
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    guests.push({
+                        id: doc.id,
+                        nama: data.nama || '',
+                        institusi: data.institusi || '',
+                        tanggal: data.tanggal || '',
+                        jam: data.jam || '',
+                        keperluan: data.keperluan || ''
+                    });
+                });
+                renderTable();
+                isLoading = false;
+            }, (error) => {
+                console.error('❌ Error listening to Firestore:', error);
+                isLoading = false;
+                alert('⚠️ Gagal terhubung ke database. Periksa koneksi internet Anda.');
+            });
+    }
+
+    // ----- TAMBAH TAMU KE FIRESTORE -----
+    async function addGuest(event) {
         event.preventDefault();
 
         const nama = namaInput.value.trim();
@@ -129,75 +163,84 @@
             return;
         }
 
-        const newGuest = {
-            nama,
-            institusi,
-            tanggal,
-            jam,
-            keperluan
-        };
+        try {
+            // Tampilkan indikator loading pada tombol
+            const saveBtn = document.getElementById('saveBtn');
+            const originalText = saveBtn.innerHTML;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
+            saveBtn.disabled = true;
 
-        guests.push(newGuest);
-        renderTable();
+            // Simpan ke Firestore
+            await guestsCollection.add({
+                nama: nama,
+                institusi: institusi,
+                tanggal: tanggal,
+                jam: jam,
+                keperluan: keperluan,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
 
-        form.reset();
-        setDefaults();
-        namaInput.focus();
+            // Reset form
+            form.reset();
+            setDefaults();
+            namaInput.focus();
 
-        document.querySelector('.table-wrapper').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            // Kembalikan tombol
+            saveBtn.innerHTML = originalText;
+            saveBtn.disabled = false;
+
+            // Scroll ke tabel
+            document.querySelector('.table-wrapper').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+        } catch (error) {
+            console.error('❌ Error adding guest:', error);
+            alert('⚠️ Gagal menyimpan data. Periksa koneksi internet Anda.');
+            
+            const saveBtn = document.getElementById('saveBtn');
+            saveBtn.innerHTML = '<i class="fas fa-save"></i> Simpan';
+            saveBtn.disabled = false;
+        }
     }
 
-    // ----- Hapus tamu -----
-    function deleteGuest(index) {
-        if (index < 0 || index >= guests.length) return;
-        const confirmed = confirm(`Hapus data tamu "${guests[index].nama}"?`);
+    // ----- HAPUS TAMU DARI FIRESTORE -----
+    async function deleteGuest(id) {
+        const guestToDelete = guests.find(g => g.id === id);
+        if (!guestToDelete) return;
+
+        const confirmed = confirm(`Hapus data tamu "${guestToDelete.nama}"?`);
         if (!confirmed) return;
-        guests.splice(index, 1);
-        renderTable();
+
+        try {
+            await guestsCollection.doc(id).delete();
+            // Data akan otomatis terhapus dari UI karena listener real-time
+        } catch (error) {
+            console.error('❌ Error deleting guest:', error);
+            alert('⚠️ Gagal menghapus data. Periksa koneksi internet Anda.');
+        }
     }
 
-    // ----- Reset form -----
+    // ----- RESET FORM -----
     function resetForm() {
         form.reset();
         setDefaults();
         namaInput.focus();
     }
 
-    // ----- Data contoh -----
-    function loadSampleData() {
-        const sample = [{
-            nama: 'Dr. Sarah Wijaya',
-            institusi: 'Universitas Indonesia',
-            tanggal: '2026-07-23',
-            jam: '09:30',
-            keperluan: 'Rapat koordinasi riset'
-        }, {
-            nama: 'Budi Santoso',
-            institusi: 'PT. Tech Inovasi',
-            tanggal: '2026-07-23',
-            jam: '11:00',
-            keperluan: 'Presentasi produk baru'
-        }, {
-            nama: 'Maya Permata',
-            institusi: 'Kementerian Pendidikan',
-            tanggal: '2026-07-22',
-            jam: '14:15',
-            keperluan: 'Kunjungan kerjasama'
-        }];
-        guests = sample;
-        renderTable();
-    }
-
-    // ----- Event listeners -----
+    // ----- EVENT LISTENERS -----
     form.addEventListener('submit', addGuest);
     document.getElementById('resetBtn').addEventListener('click', function(e) {
         e.preventDefault();
         resetForm();
     });
 
-    // ----- Start -----
+    // ----- START -----
     setDefaults();
-    loadSampleData();
+    
+    // Mulai listen data dari Firestore
+    listenGuests();
+    
     namaInput.focus();
+
+    console.log('🔥 Aplikasi Daftar Hadir Tamu terhubung ke Firebase!');
 
 })();
