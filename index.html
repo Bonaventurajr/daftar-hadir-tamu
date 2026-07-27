@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes" />
+    <title>Daftar Hadir Tamu · Premium</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet" />
+
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+
+    <!-- CSS External -->
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+    <div class="container">
+
+        <!-- HEADER -->
+        <div class="header">
+            <div class="header-left">
+                <div class="icon-wrapper">
+                    <i class="fas fa-clipboard-list"></i>
+                </div>
+                <h1>Daftar <span>Hadir</span></h1>
+            </div>
+            <div class="badge-total">
+                <i class="fas fa-users"></i>
+                <span id="totalCount">0</span> tamu
+            </div>
+        </div>
+
+        <!-- FORM -->
+        <form id="guestForm" autocomplete="off">
+            <div class="form-grid">
+
+                <div class="form-group">
+                    <label for="nama"><i class="fas fa-user"></i> Nama Lengkap <span class="required">*</span></label>
+                    <input type="text" id="nama" placeholder="Contoh: Andi Pratama" required />
+                </div>
+
+                <div class="form-group">
+                    <label for="institusi"><i class="fas fa-building"></i> Institusi / Perusahaan</label>
+                    <input type="text" id="institusi" placeholder="Contoh: PT. Maju Jaya" />
+                </div>
+
+                <div class="form-group">
+                    <label for="tanggal"><i class="fas fa-calendar-day"></i> Tanggal Berkunjung <span class="required">*</span></label>
+                    <input type="date" id="tanggal" required />
+                </div>
+
+                <div class="form-group">
+                    <label for="jam"><i class="fas fa-clock"></i> Jam Berkunjung <span class="required">*</span></label>
+                    <input type="time" id="jam" required />
+                </div>
+
+                <div class="form-group full-width">
+                    <label for="keperluan"><i class="fas fa-pen-fancy"></i> Keperluan <span class="required">*</span></label>
+                    <textarea id="keperluan" rows="2" placeholder="Jelaskan tujuan kunjungan …" required></textarea>
+                </div>
+
+            </div>
+
+            <!-- TOMBOL -->
+            <div class="action-row">
+                <button type="reset" class="btn btn-secondary" id="resetBtn">
+                    <i class="fas fa-undo-alt"></i> Reset
+                </button>
+                <button type="submit" class="btn btn-primary" id="saveBtn">
+                    <i class="fas fa-save"></i> Simpan
+                </button>
+            </div>
+        </form>
+
+        <!-- TABEL -->
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th><i class="fas fa-hashtag"></i> No</th>
+                        <th><i class="fas fa-user"></i> Nama</th>
+                        <th><i class="fas fa-calendar-day"></i> Tanggal</th>
+                        <th><i class="fas fa-clock"></i> Jam</th>
+                        <th><i class="fas fa-building"></i> Institusi</th>
+                        <th><i class="fas fa-pen-fancy"></i> Keperluan</th>
+                        <th style="text-align:center;"><i class="fas fa-trash-alt"></i></th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <!-- Data akan di-render oleh JavaScript -->
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <!-- JavaScript External -->
+    <script src="script.js"></script>
+</body>
+</html>
